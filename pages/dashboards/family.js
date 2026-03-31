@@ -6,12 +6,12 @@ import dynamic from 'next/dynamic';
 import {
   LogOut, Heart, Phone, MessageSquare, Bell, BellOff,
   CheckCircle, AlertTriangle, Headphones, MapPin,
-  Clock, Battery, Wifi, WifiOff, Activity, Eye,
+  Clock, Wifi, WifiOff, Activity, Eye,
   Send, Smile
 } from 'lucide-react';
 import { getSession, clearSession } from '../../utils/auth';
 import { fetchPiData, ts, emptyHistory, distNum } from '../../utils/piData';
-import { Panel, BigStatCard, BattBar, QuickPill, MiniChart, Loader } from './caretaker';
+import { Panel, BigStatCard, QuickPill, MiniChart, Loader } from './caretaker';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const MapView = dynamic(() => import('../../components/dashboards/MapView'), { ssr: false });
@@ -59,9 +59,10 @@ export default function FamilyDashboard() {
 
   const poll = useCallback(async () => {
     const d = await fetchPiData();
+    const hasObject = !!d?.object && d.object !== 'none';
     setData(d);
-    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: d.object !== 'none' ? 1 : 0, dist: distNum(d.distance) }]);
-    if (d.object !== 'none') addLog(d.status === 'WARNING' ? 'warning' : 'info', `${d.object} detected ${d.direction}`);
+    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: hasObject ? 1 : 0, dist: distNum(d.distance) }]);
+    if (hasObject) addLog(d.status === 'WARNING' ? 'warning' : 'info', `${d.object} detected ${d.direction || '--'}`);
     if (d.status === 'SAFE') setSafeStreak(p => p + 1);
     else setSafeStreak(0);
   }, [addLog]);
@@ -72,6 +73,10 @@ export default function FamilyDashboard() {
   }, [poll, mounted]);
 
   const isWarn = data?.status === 'WARNING';
+  const connected = data?.connected === true;
+  const hasObject = !!data?.object && data.object !== 'none';
+  const objectText = hasObject ? data.object : 'No Data';
+  const distanceText = data?.distance ?? '--';
   const logout = () => { clearSession(); router.replace('/'); };
 
   if (!mounted || !user) return <Loader />;
@@ -104,7 +109,7 @@ export default function FamilyDashboard() {
           <div>
             <div className="font-bold text-sm" style={{ color: C.dark, fontFamily: "'Nunito',sans-serif" }}>Family Monitor</div>
             <div className="text-[11px]" style={{ color: C.primary }}>
-              {isWarn ? 'Attention needed!' : safeStreak > 5 ? `Safe for ${safeStreak * 2}s` : 'Monitoring...'}
+              {connected ? `🟢 LIVE · ${isWarn ? 'Attention needed!' : safeStreak > 5 ? `Safe for ${safeStreak * 2}s` : 'Monitoring...'}` : '🔴 Hardware Not Connected'}
             </div>
           </div>
         </div>
@@ -135,7 +140,7 @@ export default function FamilyDashboard() {
       <main className="flex-1 overflow-hidden p-4 grid gap-4 min-h-0" style={{ gridTemplateRows: 'auto 1fr' }}>
 
         {/* Stat row */}
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           {/* Big safety status */}
           <div className="col-span-2 rounded-2xl p-5 flex items-center gap-4"
             style={{ background: isWarn ? '#fff1f2' : '#ecfdf5', border: `2px solid ${isWarn ? '#fecdd3' : '#a7f3d0'}` }}>
@@ -150,27 +155,26 @@ export default function FamilyDashboard() {
                 {isWarn ? 'Needs Attention' : 'Safe & Clear'}
               </div>
               <div className="text-sm mt-0.5" style={{ color: isWarn ? '#ef4444' : '#10b981' }}>
-                {isWarn ? `${data?.object} ${data?.direction} · ${data?.distance}` : `Path is clear · ${safeStreak > 0 ? `${safeStreak} safe readings` : 'Monitoring'}`}
+                {isWarn ? `${objectText} ${data?.direction ?? '--'} · ${distanceText}` : connected ? `Path is clear · ${safeStreak > 0 ? `${safeStreak} safe readings` : 'Monitoring'}` : 'Waiting for Raspberry Pi...'}
               </div>
             </div>
           </div>
           <BigStatCard label="Hearing Now" icon={<Headphones />} iconColor="#8b5cf6"
             value={data?.audio_message || '—'} valueColor="#6d28d9" bg="#f5f3ff" border="#ddd6fe" sub={`Last: ${data?.timestamp || '—'}`} small />
           <BigStatCard label="Detected Object" icon={<Eye />} iconColor={C.primary}
-            value={data?.object !== 'none' ? data?.object : 'Nothing'} valueColor={C.dark} bg={C.light} border={C.border}
+            value={objectText} valueColor={C.dark} bg={C.light} border={C.border}
             sub={`Direction: ${data?.direction ?? '—'}`} />
-          <BigStatCard label="Battery" icon={<Battery />} iconColor={data?.battery > 30 ? '#10b981' : '#ef4444'}
-            value={<BattBar pct={data?.battery ?? 0} />} valueColor="#1f2937" bg="white" border="#e5e7eb"
-            sub={`${data?.battery ?? 0}% remaining`} />
         </div>
 
         {/* Panels */}
-        <div className="grid gap-4 min-h-0" style={{ gridTemplateColumns: '1.2fr 1fr 0.9fr', gridTemplateRows: '1fr' }}>
+        <div className="grid gap-4 min-h-0" style={{ gridTemplateColumns: data?.gps ? '1.2fr 1fr 0.9fr' : '1fr 1fr', gridTemplateRows: '1fr' }}>
 
           {/* Map */}
-          <Panel label="Live Location" icon={<MapPin className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
-            <MapView accentColor={C.primary} />
-          </Panel>
+          {data?.gps && (
+            <Panel label="Live Location" icon={<MapPin className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
+              <MapView accentColor={C.primary} gps={data.gps} />
+            </Panel>
+          )}
 
           {/* Last sent message + quick messages */}
           <Panel label="Messages to Device" icon={<MessageSquare className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>

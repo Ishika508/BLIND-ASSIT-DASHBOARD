@@ -3,21 +3,23 @@ import { useEffect, useRef, useState } from 'react';
 const BASE_LAT = 23.0225;
 const BASE_LNG = 72.5714;
 
-export default function MapPanel() {
+export default function MapPanel({ gps = null }) {
   const ref = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [coords, setCoords] = useState({ lat: BASE_LAT, lng: BASE_LNG });
+  const hasGps = gps && typeof gps.lat === 'number' && typeof gps.lng === 'number';
+  const lat = gps?.lat;
+  const lng = gps?.lng;
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setCoords(p => ({ lat: p.lat + (Math.random() - 0.5) * 0.0003, lng: p.lng + (Math.random() - 0.5) * 0.0003 }));
-    }, 3000);
-    return () => clearInterval(t);
-  }, []);
+    if (!hasGps) return;
+    setCoords({ lat, lng });
+  }, [hasGps, lat, lng]);
 
   useEffect(() => {
+    if (!hasGps) return;
     if (!ref.current || mapRef.current) return;
     const init = async () => {
       try {
@@ -26,23 +28,33 @@ export default function MapPanel() {
           html: `<div style="width:16px;height:16px;border-radius:50%;background:#f97316;border:3px solid white;box-shadow:0 0 12px rgba(249,115,22,0.8)"></div>`,
           className: '', iconSize: [16, 16], iconAnchor: [8, 8],
         });
-        const map = L.map(ref.current, { center: [BASE_LAT, BASE_LNG], zoom: 16, zoomControl: false, attributionControl: false });
+        const map = L.map(ref.current, { center: [coords.lat, coords.lng], zoom: 16, zoomControl: false, attributionControl: false });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { opacity: 0.5 }).addTo(map);
-        L.circle([BASE_LAT, BASE_LNG], { radius: 60, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.08, weight: 1 }).addTo(map);
-        markerRef.current = L.marker([BASE_LAT, BASE_LNG], { icon }).addTo(map);
+        L.circle([coords.lat, coords.lng], { radius: 60, color: '#f97316', fillColor: '#f97316', fillOpacity: 0.08, weight: 1 }).addTo(map);
+        markerRef.current = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
         mapRef.current = map;
         setReady(true);
       } catch (e) { console.error(e); }
     };
     init();
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
-  }, []);
+  }, [hasGps, coords.lat, coords.lng]);
 
   useEffect(() => {
+    if (!hasGps) return;
     if (!mapRef.current || !markerRef.current) return;
     markerRef.current.setLatLng([coords.lat, coords.lng]);
     mapRef.current.panTo([coords.lat, coords.lng], { animate: true, duration: 1 });
-  }, [coords]);
+  }, [hasGps, coords]);
+
+  if (!hasGps) {
+    return (
+      <div className="relative w-full h-full rounded-xl overflow-hidden flex items-center justify-center"
+        style={{ minHeight: 120, background: 'rgba(15,15,26,0.8)', border: '1px dashed rgba(148,163,184,0.5)', color: 'rgba(248,250,252,0.8)' }}>
+        GPS Not Available
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden" style={{ minHeight: 120 }}>

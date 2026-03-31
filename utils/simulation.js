@@ -11,36 +11,45 @@ export async function fetchPiData() {
     });
     if (!res.ok) throw new Error("Pi offline");
     const json = await res.json();
+    const gps =
+      json.gps && typeof json.gps === "object"
+        ? json.gps
+        : json.lat != null && json.lng != null
+          ? { lat: json.lat, lng: json.lng }
+          : null;
+
     return {
       status:        json.status        ?? "SAFE",
-      object:        json.object        ?? "none",
-      distance:      json.distance      ?? "clear",
+      object:        json.object        ?? null,
+      distance:      json.distance      ?? null,
       audio_message: json.audio_message ?? "Path is clear",
       timestamp:     json.timestamp     ?? new Date().toLocaleTimeString(),
-      processing_speed: json.processing_speed ?? 28,
-      confidence:    json.confidence    ?? 92,
-      battery:       json.battery       ?? 80,
+      processing_speed: json.processing_speed ?? null,
+      confidence:    json.confidence    ?? null,
+      battery:       json.battery       ?? null,
+      gps,
+      connected: true,
       source: "live",
     };
   } catch {
-    // Pi unreachable — return last known safe state tagged as simulated
+    // Pi unreachable: return a disconnected-safe payload with nullable fields.
     return {
-      status: "SAFE", object: "none", distance: "clear",
-      audio_message: "Waiting for Pi connection...",
+      status: "DISCONNECTED",
+      object: null,
+      distance: null,
+      battery: null,
+      gps: null,
+      audio_message: "Waiting for Raspberry Pi...",
       timestamp: new Date().toLocaleTimeString(),
-      processing_speed: 0, confidence: 0, battery: 0,
-      source: "simulated",
+      processing_speed: null,
+      confidence: null,
+      connected: false,
+      source: "disconnected",
     };
   }
 }
 
 // ── Keep these exports so other components don't break ───────────────────
-export function generateSensorData()          { return {}; }
-export function generateObstacleHistory(n=20) {
-  return Array.from({ length: n }, (_, i) => ({
-    time: new Date(Date.now() - (n - i) * 3500)
-      .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-    detections: 0, alerts: 0, distance: 0,
-  }));
-}
+export function generateSensorData()          { return null; }
+export function generateObstacleHistory()     { return []; }
 export function randomLogEvent() { return null; }

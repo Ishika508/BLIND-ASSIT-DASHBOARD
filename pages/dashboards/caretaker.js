@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import {
   LogOut, Phone, MessageSquare, Bell, BellOff,
-  ShieldCheck, Activity, Eye, Headphones, Battery,
+  ShieldCheck, Activity, Eye, Headphones,
   MapPin, AlertTriangle, CheckCircle, Wifi, WifiOff,
   Mic, MicOff, Volume2, Navigation, Zap, Clock,
   BarChart2, TrendingUp, User
@@ -55,9 +55,10 @@ export default function CaretakerDashboard() {
 
   const poll = useCallback(async () => {
     const d = await fetchPiData();
+    const hasObject = !!d?.object && d.object !== 'none';
     setData(d);
-    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: d.object !== 'none' ? 1 : 0, alert: d.status === 'WARNING' ? 1 : 0, dist: distNum(d.distance), fps: d.processing_speed }]);
-    if (d.object !== 'none') addLog(d.status === 'WARNING' ? 'warning' : 'info', `${d.object} ${d.direction} — ${d.distance}`);
+    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: hasObject ? 1 : 0, alert: d.status === 'WARNING' ? 1 : 0, dist: distNum(d.distance), fps: d.processing_speed || 0 }]);
+    if (hasObject) addLog(d.status === 'WARNING' ? 'warning' : 'info', `${d.object} ${d.direction || ''} — ${d.distance ?? '--'}`);
   }, [addLog]);
 
   useEffect(() => {
@@ -100,6 +101,10 @@ export default function CaretakerDashboard() {
 
   const logout = () => { clearSession(); router.replace('/'); };
   const isWarn = data?.status === 'WARNING';
+  const connected = data?.connected === true;
+  const hasObject = !!data?.object && data.object !== 'none';
+  const objectText = hasObject ? data.object : 'No Data';
+  const distanceText = data?.distance ?? '--';
 
   if (!mounted || !user) return <Loader />;
 
@@ -113,7 +118,7 @@ export default function CaretakerDashboard() {
             style={{ background: 'linear-gradient(90deg,#f97316,#ef4444)', color: 'white' }}>
             <div className="flex items-center justify-center gap-3 py-2.5 text-sm font-bold" style={{ fontFamily: "'Nunito',sans-serif" }}>
               <AlertTriangle className="w-4 h-4 animate-bounce" />
-              OBSTACLE DETECTED — {data?.object?.toUpperCase()} {data?.direction?.toUpperCase()} · {data?.distance?.toUpperCase()}
+              OBSTACLE DETECTED — {(data?.object || 'NO DATA').toUpperCase()} {(data?.direction || '--').toUpperCase()} · {String(data?.distance ?? '--').toUpperCase()}
               <AlertTriangle className="w-4 h-4 animate-bounce" />
             </div>
           </motion.div>
@@ -130,7 +135,7 @@ export default function CaretakerDashboard() {
           <div>
             <div className="font-bold text-sm" style={{ color: C.dark, fontFamily: "'Nunito',sans-serif" }}>Personal Caretaker</div>
             <div className="text-[11px]" style={{ color: C.primary }}>
-              {data?.source === 'live' ? `● Live · ${user.piIds?.[0]}` : '○ Simulation Mode'}
+              {connected ? `🟢 LIVE · ${user.piIds?.[0]}` : '🔴 Hardware Not Connected'}
             </div>
           </div>
         </div>
@@ -163,31 +168,30 @@ export default function CaretakerDashboard() {
         style={{ gridTemplateRows: 'auto 1fr' }}>
 
         {/* Stat row */}
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           <BigStatCard label="Status" icon={isWarn ? <AlertTriangle /> : <CheckCircle />} iconColor={isWarn ? '#f97316' : '#10b981'}
             value={data?.status || '—'} valueColor={isWarn ? '#c2410c' : '#065f46'} bg={isWarn ? '#fff7ed' : '#ecfdf5'} border={isWarn ? '#fed7aa' : '#a7f3d0'}
-            sub={isWarn ? `${data?.object} ${data?.direction}` : 'All clear'} />
+            sub={isWarn ? `${objectText} ${data?.direction ?? ''}` : connected ? 'All clear' : 'Disconnected'} />
           <BigStatCard label="Detected" icon={<Eye />} iconColor={C.primary}
-            value={data?.object !== 'none' ? data?.object : 'Nothing'} valueColor={C.dark} bg={C.light} border={C.border}
-            sub={`${data?.confidence ?? 0}% conf · ${data?.direction ?? '—'}`} />
+            value={objectText} valueColor={C.dark} bg={C.light} border={C.border}
+            sub={`${data?.confidence ?? 'N/A'}% conf · ${data?.direction ?? '—'}`} />
           <BigStatCard label="Distance" icon={<Navigation />} iconColor={C.primary}
-            value={data?.distance || '—'} valueColor={C.dark} bg={C.light} border={C.border}
-            sub={`${data?.processing_speed ?? 0} FPS`} />
+            value={distanceText} valueColor={C.dark} bg={C.light} border={C.border}
+            sub={`${data?.processing_speed ?? 'N/A'} FPS`} />
           <BigStatCard label="Audio Guidance" icon={<Headphones />} iconColor="#8b5cf6"
             value={data?.audio_message || '—'} valueColor="#6d28d9" bg="#f5f3ff" border="#ddd6fe"
             sub={`Last: ${data?.timestamp || '—'}`} small />
-          <BigStatCard label="Battery" icon={<Battery />} iconColor={data?.battery > 30 ? '#10b981' : '#ef4444'}
-            value={<BattBar pct={data?.battery ?? 0} />} valueColor="#1f2937" bg="white" border="#e5e7eb"
-            sub={`${data?.battery ?? 0}% · ${data?.source === 'live' ? 'Live' : 'Simulated'}`} />
         </div>
 
         {/* Bottom panels */}
-        <div className="grid gap-4 min-h-0" style={{ gridTemplateColumns: '1.1fr 1fr 1fr', gridTemplateRows: '1fr' }}>
+        <div className="grid gap-4 min-h-0" style={{ gridTemplateColumns: data?.gps ? '1.1fr 1fr 1fr' : '1fr 1fr', gridTemplateRows: '1fr' }}>
 
           {/* Map */}
-          <Panel label="Live Location" icon={<MapPin className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
-            <MapView accentColor={C.primary} />
-          </Panel>
+          {data?.gps && (
+            <Panel label="Live Location" icon={<MapPin className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
+              <MapView accentColor={C.primary} gps={data.gps} />
+            </Panel>
+          )}
 
           {/* Charts */}
           <Panel label="Detection Analytics" icon={<BarChart2 className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>

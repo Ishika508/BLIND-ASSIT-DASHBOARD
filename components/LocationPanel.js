@@ -14,25 +14,18 @@ export default function LocationPanel({ data }) {
   const [mapReady, setMapReady] = useState(false);
   const [coords, setCoords] = useState({ lat: BASE_LAT, lng: BASE_LNG });
   const [mounted, setMounted] = useState(false);
+  const hasGps = data?.gps && typeof data.gps.lat === 'number' && typeof data.gps.lng === 'number';
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!mounted) return;
-    if (typeof window === 'undefined') return;
-
-    // Slight random drift to simulate movement
-    const interval = setInterval(() => {
-      setCoords(prev => ({
-        lat: prev.lat + (Math.random() - 0.5) * 0.0003,
-        lng: prev.lng + (Math.random() - 0.5) * 0.0003,
-      }));
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [mounted]);
+    if (!hasGps) return;
+    setCoords({ lat: data.gps.lat, lng: data.gps.lng });
+  }, [mounted, hasGps, data?.gps?.lat, data?.gps?.lng]);
 
   useEffect(() => {
+    if (!hasGps) return;
     if (!mounted || !mapRef.current || leafletMapRef.current) return;
 
     const initMap = async () => {
@@ -72,7 +65,7 @@ export default function LocationPanel({ data }) {
         });
 
         const map = L.map(mapRef.current, {
-          center: [BASE_LAT, BASE_LNG],
+          center: [coords.lat, coords.lng],
           zoom: 16,
           zoomControl: false,
           attributionControl: false,
@@ -83,7 +76,7 @@ export default function LocationPanel({ data }) {
         }).addTo(map);
 
         // Add radius circle
-        L.circle([BASE_LAT, BASE_LNG], {
+        L.circle([coords.lat, coords.lng], {
           radius: 50,
           color: 'rgba(34,211,238,0.4)',
           fillColor: 'rgba(34,211,238,0.08)',
@@ -91,7 +84,7 @@ export default function LocationPanel({ data }) {
           weight: 1,
         }).addTo(map);
 
-        const marker = L.marker([BASE_LAT, BASE_LNG], { icon }).addTo(map);
+        const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
         marker.bindTooltip('👤 User Location', {
           permanent: true,
           direction: 'top',
@@ -115,13 +108,14 @@ export default function LocationPanel({ data }) {
         leafletMapRef.current = null;
       }
     };
-  }, [mounted]);
+  }, [mounted, hasGps, coords.lat, coords.lng]);
 
   useEffect(() => {
+    if (!hasGps) return;
     if (!leafletMapRef.current || !markerRef.current) return;
     markerRef.current.setLatLng([coords.lat, coords.lng]);
     leafletMapRef.current.panTo([coords.lat, coords.lng], { animate: true, duration: 1 });
-  }, [coords]);
+  }, [hasGps, coords]);
 
   return (
     <div className="glass-card rounded-2xl p-5 h-full flex flex-col relative overflow-hidden">
@@ -132,8 +126,10 @@ export default function LocationPanel({ data }) {
           <span className="text-xs font-mono text-cyan-400/70 tracking-widest uppercase">Live Location</span>
         </div>
         <div className="flex items-center gap-2">
-          <Satellite className="w-3.5 h-3.5 text-green-400" />
-          <span className="text-xs font-mono text-green-400">GPS Active</span>
+          <Satellite className={`w-3.5 h-3.5 ${hasGps ? 'text-green-400' : 'text-slate-400'}`} />
+          <span className={`text-xs font-mono ${hasGps ? 'text-green-400' : 'text-slate-400'}`}>
+            {hasGps ? 'GPS Active' : 'GPS Not Available'}
+          </span>
         </div>
       </div>
 
@@ -141,7 +137,7 @@ export default function LocationPanel({ data }) {
       <div className="flex-1 relative rounded-xl overflow-hidden min-h-[200px]"
         style={{ border: '1px solid rgba(34,211,238,0.15)' }}
       >
-        <div ref={mapRef} className="absolute inset-0" style={{ zIndex: 1 }} />
+        {hasGps && <div ref={mapRef} className="absolute inset-0" style={{ zIndex: 1 }} />}
 
         {/* Corner overlays */}
         <div className="absolute top-2 left-2 z-10 pointer-events-none">
@@ -158,7 +154,13 @@ export default function LocationPanel({ data }) {
         </div>
 
         {/* Loading overlay */}
-        {!mapReady && (
+        {!hasGps && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0d1a2e] z-20">
+            <div className="text-xs font-mono text-slate-400">GPS Not Available</div>
+          </div>
+        )}
+
+        {hasGps && !mapReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0d1a2e] z-20">
             <div className="text-center">
               <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-2" />
@@ -173,7 +175,7 @@ export default function LocationPanel({ data }) {
         <div className="flex items-center gap-1.5">
           <Crosshair className="w-3.5 h-3.5 text-slate-500" />
           <span className="text-[10px] font-mono text-slate-500">
-            {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+            {hasGps ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'GPS Not Available'}
           </span>
         </div>
         <div className="flex items-center gap-1.5">

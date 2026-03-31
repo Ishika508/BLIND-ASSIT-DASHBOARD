@@ -3,6 +3,8 @@ import { AlertTriangle, CheckCircle, Radar, Zap, Target, Cpu } from 'lucide-reac
 
 export default function SystemStatusPanel({ data }) {
   const isWarning = data?.status === 'WARNING';
+  const connected = data?.connected === true;
+  const hasObject = !!data?.object && data.object !== 'none';
   const color = isWarning ? 'amber' : 'green';
   const colorMap = {
     amber: { text: 'text-amber-400', border: 'border-amber-500/30', bg: 'bg-amber-500/10', glow: 'rgba(245,158,11,0.3)', dot: '#f59e0b' },
@@ -84,8 +86,8 @@ export default function SystemStatusPanel({ data }) {
         <StatBox
           icon={<Target className="w-3.5 h-3.5" />}
           label="Detected Object"
-          value={data?.object !== 'none' ? data?.object : '—'}
-          valueClass={data?.object !== 'none' ? 'text-amber-300' : 'text-slate-400'}
+          value={hasObject ? data?.object : 'No Data'}
+          valueClass={hasObject ? 'text-amber-300' : 'text-slate-400'}
         />
         <StatBox
           icon={<Zap className="w-3.5 h-3.5" />}
@@ -102,8 +104,8 @@ export default function SystemStatusPanel({ data }) {
         <StatBox
           icon={<Radar className="w-3.5 h-3.5" />}
           label="Data Source"
-          value={data?.source === 'live' ? 'Live Pi' : 'Simulated'}
-          valueClass={data?.source === 'live' ? 'text-green-300' : 'text-slate-400'}
+          value={connected ? 'LIVE' : 'Hardware Not Connected'}
+          valueClass={connected ? 'text-green-300' : 'text-slate-400'}
         />
       </div>
 
@@ -112,7 +114,7 @@ export default function SystemStatusPanel({ data }) {
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs font-mono text-slate-400">Obstacle Distance</span>
           <span className={`text-xs font-mono font-semibold ${isWarning ? 'text-amber-400' : 'text-green-400'}`}>
-            {data?.distance ? `${data.distance}m` : 'N/A'}
+            {data?.distance ?? '--'}
           </span>
         </div>
         <div className="h-2 bg-slate-800 rounded-full overflow-hidden">

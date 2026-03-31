@@ -5,14 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import {
   LogOut, Building2, Users, Activity, Eye, Headphones,
-  Battery, AlertTriangle, CheckCircle, Clock, MapPin,
+  AlertTriangle, CheckCircle, Clock, MapPin,
   Phone, Bell, BellOff, FileText, TrendingUp, BarChart2,
   ChevronRight, Download, RefreshCw
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { getSession, clearSession } from '../../utils/auth';
 import { fetchPiData, ts, emptyHistory, distNum, MOCK_PATIENTS } from '../../utils/piData';
-import { Panel, BigStatCard, BattBar, QuickPill, MiniChart, Loader } from './caretaker';
+import { Panel, BigStatCard, QuickPill, MiniChart, Loader } from './caretaker';
 
 const MapView = dynamic(() => import('../../components/dashboards/MapView'), { ssr: false });
 
@@ -53,9 +53,10 @@ export default function HospitalDashboard() {
 
   const poll = useCallback(async () => {
     const d = await fetchPiData();
+    const hasObject = !!d?.object && d.object !== 'none';
     setData(d);
-    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: d.object !== 'none' ? 1 : 0, alert: d.status === 'WARNING' ? 1 : 0, dist: distNum(d.distance) }]);
-    if (d.object !== 'none') addLog(d.status === 'WARNING' ? 'warning' : 'info', `[${activePatient?.name}] ${d.object} ${d.direction} — ${d.distance}`);
+    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: hasObject ? 1 : 0, alert: d.status === 'WARNING' ? 1 : 0, dist: distNum(d.distance) }]);
+    if (hasObject) addLog(d.status === 'WARNING' ? 'warning' : 'info', `[${activePatient?.name}] ${d.object} ${d.direction || '--'} — ${d.distance ?? '--'}`);
     // Simulate random patient status changes
     if (Math.random() > 0.85) {
       setPatients(prev => prev.map(p =>
@@ -71,6 +72,9 @@ export default function HospitalDashboard() {
 
   const logout = () => { clearSession(); router.replace('/'); };
   const isWarn = data?.status === 'WARNING';
+  const connected = data?.connected === true;
+  const hasObject = !!data?.object && data.object !== 'none';
+  const objectText = hasObject ? data.object : 'No Data';
   const warningPatients = patients.filter(p => p.status === 'WARNING').length;
 
   if (!mounted || !user) return <Loader />;
@@ -89,7 +93,11 @@ export default function HospitalDashboard() {
           <div>
             <div className="font-bold text-sm" style={{ color: C.dark, fontFamily: "'Nunito',sans-serif" }}>Hospital Clinical Dashboard</div>
             <div className="text-[11px]" style={{ color: C.primary }}>
-              {warningPatients > 0 ? `${warningPatients} patient${warningPatients > 1 ? 's' : ''} need attention` : 'All patients monitored'}
+              {connected
+                ? warningPatients > 0
+                  ? `🟢 LIVE · ${warningPatients} patient${warningPatients > 1 ? 's' : ''} need attention`
+                  : '🟢 LIVE · All patients monitored'
+                : '🔴 Hardware Not Connected'}
             </div>
           </div>
         </div>
@@ -181,28 +189,27 @@ export default function HospitalDashboard() {
         <div className="flex flex-col gap-4 min-h-0">
 
           {/* Stat row for active patient */}
-          <div className="grid grid-cols-4 gap-3 flex-shrink-0">
+          <div className="grid grid-cols-3 gap-3 flex-shrink-0">
             <BigStatCard label="Patient Status" icon={isWarn ? <AlertTriangle /> : <CheckCircle />}
               iconColor={isWarn ? '#ef4444' : '#10b981'} value={data?.status || '—'}
               valueColor={isWarn ? '#b91c1c' : '#065f46'} bg={isWarn ? '#fef2f2' : '#ecfdf5'} border={isWarn ? '#fecaca' : '#a7f3d0'}
               sub={`Patient: ${activePatient?.name}`} />
             <BigStatCard label="Detection" icon={<Eye />} iconColor={C.primary}
-              value={data?.object !== 'none' ? data?.object : 'Clear'} valueColor={C.dark} bg={C.light} border={C.border}
+              value={objectText} valueColor={C.dark} bg={C.light} border={C.border}
               sub={`${data?.direction ?? '—'} · ${data?.confidence ?? 0}%`} />
             <BigStatCard label="Audio (Headphones)" icon={<Headphones />} iconColor="#8b5cf6"
               value={data?.audio_message || '—'} valueColor="#6d28d9" bg="#f5f3ff" border="#ddd6fe"
               sub={data?.timestamp || '—'} small />
-            <BigStatCard label="Device Battery" icon={<Battery />} iconColor={data?.battery > 30 ? '#10b981' : '#ef4444'}
-              value={<BattBar pct={data?.battery ?? 0} />} valueColor="#1f2937" bg="white" border="#e5e7eb"
-              sub={`${data?.battery ?? 0}% · ${data?.processing_speed ?? 0} FPS`} />
           </div>
 
           {/* Panels row */}
-          <div className="flex-1 grid gap-4 min-h-0" style={{ gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: '1fr' }}>
+          <div className="flex-1 grid gap-4 min-h-0" style={{ gridTemplateColumns: data?.gps ? '1fr 1fr 1fr' : '1fr 1fr', gridTemplateRows: '1fr' }}>
 
-            <Panel label={`${activePatient?.name} — Location`} icon={<MapPin className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
-              <MapView accentColor={C.primary} />
-            </Panel>
+            {data?.gps && (
+              <Panel label={`${activePatient?.name} — Location`} icon={<MapPin className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
+                <MapView accentColor={C.primary} gps={data.gps} />
+              </Panel>
+            )}
 
             <Panel label="Detection Analytics" icon={<BarChart2 className="w-4 h-4" />} color={C.primary} border={C.border} bg={C.light}>
               <div className="h-full flex flex-col gap-3 min-h-0">

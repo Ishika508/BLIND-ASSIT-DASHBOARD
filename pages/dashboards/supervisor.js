@@ -6,7 +6,7 @@ import {
   LogOut, Monitor, Wifi, WifiOff, AlertTriangle, CheckCircle,
   Battery, Activity, Eye, Users, Cpu, BarChart2,
   RefreshCw, Shield, ShieldCheck, Heart, Building2, Clock,
-  TrendingUp, Server, Globe, Bell, Settings
+  TrendingUp, Server, Globe, Bell, Settings, Zap
 } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { getSession, clearSession, ROLES, ROLE_CONFIG } from '../../utils/auth';
@@ -63,17 +63,18 @@ export default function SupervisorDashboard() {
 
   const poll = useCallback(async () => {
     const d = await fetchPiData();
+    const hasObject = !!d?.object && d.object !== 'none';
     setData(d);
-    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: d.object !== 'none' ? 1 : 0, alert: d.status === 'WARNING' ? 1 : 0, dist: distNum(d.distance), fps: d.processing_speed }]);
+    setHistory(p => [...p.slice(-22), { t: d.timestamp, det: hasObject ? 1 : 0, alert: d.status === 'WARNING' ? 1 : 0, dist: distNum(d.distance), fps: d.processing_speed || 0 }]);
     // Simulate device status fluctuation
     if (Math.random() > 0.9) {
       setDevices(prev => prev.map(dv =>
         dv.piId === activeDevice?.piId
-          ? { ...dv, status: d.status === 'WARNING' ? 'warning' : 'online', battery: d.battery }
+          ? { ...dv, status: d.connected === false ? 'offline' : d.status === 'WARNING' ? 'warning' : 'online', battery: d.battery ?? dv.battery }
           : dv
       ));
     }
-    if (d.object !== 'none') addLog(d.status === 'WARNING' ? 'warning' : 'info', `[${activeDevice?.piId}] ${d.object} ${d.direction} — ${d.distance}`);
+    if (hasObject) addLog(d.status === 'WARNING' ? 'warning' : 'info', `[${activeDevice?.piId}] ${d.object} ${d.direction || '--'} — ${d.distance ?? '--'}`);
   }, [addLog, activeDevice]);
 
   useEffect(() => {
@@ -86,6 +87,9 @@ export default function SupervisorDashboard() {
   const onlineCount  = devices.filter(d => d.status !== 'offline').length;
   const warningCount = devices.filter(d => d.status === 'warning').length;
   const offlineCount = devices.filter(d => d.status === 'offline').length;
+  const connected = data?.connected === true;
+  const hasObject = !!data?.object && data.object !== 'none';
+  const objectText = hasObject ? data.object : 'No Data';
 
   const pieData = [
     { name: 'Online',  value: onlineCount - warningCount, color: '#10b981' },
@@ -109,7 +113,9 @@ export default function SupervisorDashboard() {
           <div>
             <div className="font-bold text-sm" style={{ color: C.dark, fontFamily: "'Nunito',sans-serif" }}>IT Supervisor Console</div>
             <div className="text-[11px]" style={{ color: C.primary }}>
-              {onlineCount}/{devices.length} devices online · {warningCount} alert{warningCount !== 1 ? 's' : ''}
+              {connected
+                ? `🟢 LIVE · ${onlineCount}/${devices.length} devices online · ${warningCount} alert${warningCount !== 1 ? 's' : ''}`
+                : '🔴 Hardware Not Connected'}
             </div>
           </div>
         </div>
@@ -208,11 +214,11 @@ export default function SupervisorDashboard() {
                   value={activeDevice?.piId || '—'} valueColor={C.dark} bg={C.light} border={C.border}
                   sub={`User: ${activeDevice?.user}`} />
                 <BigStatCard label="Detection Feed" icon={<Eye />} iconColor={C.primary}
-                  value={data?.object !== 'none' ? data?.object : 'Clear'} valueColor={C.dark} bg={C.light} border={C.border}
-                  sub={`${data?.status} · ${data?.direction ?? '—'}`} />
+                  value={objectText} valueColor={C.dark} bg={C.light} border={C.border}
+                  sub={`${data?.status ?? 'DISCONNECTED'} · ${data?.direction ?? '--'}`} />
                 <BigStatCard label="Processing" icon={<Zap />} iconColor="#f97316"
-                  value={`${data?.processing_speed ?? 0} FPS`} valueColor="#c2410c" bg="#fff7ed" border="#fed7aa"
-                  sub={`Confidence: ${data?.confidence ?? 0}%`} />
+                  value={`${data?.processing_speed ?? 'N/A'} FPS`} valueColor="#c2410c" bg="#fff7ed" border="#fed7aa"
+                  sub={`Confidence: ${data?.confidence ?? 'N/A'}%`} />
               </div>
 
               {/* Device list */}
@@ -432,5 +438,3 @@ export default function SupervisorDashboard() {
   );
 }
 
-// Missing import fix
-function Zap({ className }) { return <Activity className={className} />; }

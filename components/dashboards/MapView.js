@@ -3,22 +3,23 @@ import { useEffect, useRef, useState } from 'react';
 
 const BASE = { lat: 23.0225, lng: 72.5714 };
 
-export default function MapView({ accentColor = '#6366f1' }) {
+export default function MapView({ accentColor = '#6366f1', gps = null }) {
   const ref    = useRef(null);
   const mapRef = useRef(null);
   const mRef   = useRef(null);
   const [ready, setReady]   = useState(false);
   const [coords, setCoords] = useState(BASE);
+  const hasGps = gps && typeof gps.lat === 'number' && typeof gps.lng === 'number';
+  const lat = gps?.lat;
+  const lng = gps?.lng;
 
   useEffect(() => {
-    const t = setInterval(() => setCoords(p => ({
-      lat: p.lat + (Math.random() - 0.5) * 0.0003,
-      lng: p.lng + (Math.random() - 0.5) * 0.0003,
-    })), 3000);
-    return () => clearInterval(t);
-  }, []);
+    if (!hasGps) return;
+    setCoords({ lat, lng });
+  }, [hasGps, lat, lng]);
 
   useEffect(() => {
+    if (!hasGps) return;
     if (!ref.current || mapRef.current) return;
     (async () => {
       try {
@@ -27,22 +28,32 @@ export default function MapView({ accentColor = '#6366f1' }) {
           html: `<div style="width:16px;height:16px;border-radius:50%;background:${accentColor};border:3px solid white;box-shadow:0 2px 14px ${accentColor}80;"></div>`,
           className: '', iconSize: [16, 16], iconAnchor: [8, 8],
         });
-        const map = L.map(ref.current, { center: [BASE.lat, BASE.lng], zoom: 16, zoomControl: false, attributionControl: false });
+        const map = L.map(ref.current, { center: [coords.lat, coords.lng], zoom: 16, zoomControl: false, attributionControl: false });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { opacity: 0.9 }).addTo(map);
-        L.circle([BASE.lat, BASE.lng], { radius: 50, color: accentColor, fillColor: accentColor, fillOpacity: 0.08, weight: 2 }).addTo(map);
-        mRef.current = L.marker([BASE.lat, BASE.lng], { icon }).addTo(map);
+        L.circle([coords.lat, coords.lng], { radius: 50, color: accentColor, fillColor: accentColor, fillOpacity: 0.08, weight: 2 }).addTo(map);
+        mRef.current = L.marker([coords.lat, coords.lng], { icon }).addTo(map);
         mapRef.current = map;
         setReady(true);
       } catch (e) { console.error(e); }
     })();
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
-  }, []);
+  }, [hasGps, accentColor, coords.lat, coords.lng]);
 
   useEffect(() => {
+    if (!hasGps) return;
     if (!mapRef.current || !mRef.current) return;
     mRef.current.setLatLng([coords.lat, coords.lng]);
     mapRef.current.panTo([coords.lat, coords.lng], { animate: true, duration: 1 });
-  }, [coords]);
+  }, [hasGps, coords]);
+
+  if (!hasGps) {
+    return (
+      <div className="w-full h-full rounded-2xl flex items-center justify-center"
+        style={{ minHeight: 100, background: '#f8fafc', border: '1px dashed #cbd5e1', color: '#64748b' }}>
+        GPS Not Available
+      </div>
+    );
+  }
 
   return (
     <div

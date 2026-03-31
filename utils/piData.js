@@ -10,38 +10,42 @@ export async function fetchPiData() {
     });
     if (!res.ok) throw new Error();
     const j = await res.json();
+    const gps =
+      j.gps && typeof j.gps === 'object'
+        ? j.gps
+        : j.lat != null && j.lng != null
+          ? { lat: j.lat, lng: j.lng }
+          : null;
+
     return {
       status:           j.status           ?? 'SAFE',
-      object:           j.object           ?? 'none',
-      distance:         j.distance         ?? 'clear',
-      direction:        j.direction        ?? 'ahead',
+      object:           j.object           ?? null,
+      distance:         j.distance         ?? null,
+      direction:        j.direction        ?? null,
       audio_message:    j.audio_message    ?? 'Path is clear',
       timestamp:        j.timestamp        ?? ts(),
-      processing_speed: j.processing_speed ?? 28,
-      confidence:       j.confidence       ?? 92.0,
-      battery:          j.battery          ?? 80,
+      processing_speed: j.processing_speed ?? null,
+      confidence:       j.confidence       ?? null,
+      battery:          j.battery          ?? null,
+      gps,
+      connected: true,
       source: 'live',
     };
   } catch {
-    // Simulated fallback
-    const objs = ['person', 'chair', 'wall', 'stairs', 'door', 'none', 'none', 'none'];
-    const dirs  = ['ahead', 'left', 'right'];
-    const dists = ['very close', 'near', 'far'];
-    const obj  = objs[Math.floor(Math.random() * objs.length)];
-    const dir  = dirs[Math.floor(Math.random() * dirs.length)];
-    const dist = obj !== 'none' ? dists[Math.floor(Math.random() * 2)] : 'far';
-    const warn = obj !== 'none' && dist !== 'far';
+    // Safe disconnected payload: no random data, no crashing consumers.
     return {
-      status:           warn ? 'WARNING' : 'SAFE',
-      object:           obj,
-      distance:         dist,
-      direction:        dir,
-      audio_message:    obj !== 'none' ? `${obj} ${dir} ${dist}` : 'Path is clear',
+      status:           'DISCONNECTED',
+      object:           null,
+      distance:         null,
+      direction:        null,
+      audio_message:    'Waiting for Raspberry Pi...',
       timestamp:        ts(),
-      processing_speed: Math.floor(Math.random() * 15) + 22,
-      confidence:       parseFloat((Math.random() * 12 + 85).toFixed(1)),
-      battery:          Math.floor(Math.random() * 20) + 65,
-      source: 'simulated',
+      processing_speed: null,
+      confidence:       null,
+      battery:          null,
+      gps:              null,
+      connected:        false,
+      source:           'disconnected',
     };
   }
 }
@@ -52,7 +56,8 @@ export function ts() {
 
 export function distNum(d) {
   if (typeof d === 'number') return d;
-  return d === 'very close' ? 0.4 : d === 'near' ? 1.2 : 3.5;
+  if (typeof d === 'string') return d === 'very close' ? 0.4 : d === 'near' ? 1.2 : 3.5;
+  return 0;
 }
 
 export function emptyHistory(n = 18) {
